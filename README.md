@@ -190,3 +190,234 @@ Config file /lib/systemd/system/docker.service
 </p>
 </details>
 
+## Comandos básicos de docker
+
+<details>
+<p>
+
+```
+Options:
+      --config string      Location of client config files (default "/home/dreamgenics/.docker")
+  -c, --context string     Name of the context to use to connect to the daemon (overrides DOCKER_HOST env var and default
+                           context set with "docker context use")
+  -D, --debug              Enable debug mode
+  -H, --host list          Daemon socket(s) to connect to
+  -l, --log-level string   Set the logging level ("debug"|"info"|"warn"|"error"|"fatal") (default "info")
+      --tls                Use TLS; implied by --tlsverify
+      --tlscacert string   Trust certs signed only by this CA (default "/home/dreamgenics/.docker/ca.pem")
+      --tlscert string     Path to TLS certificate file (default "/home/dreamgenics/.docker/cert.pem")
+      --tlskey string      Path to TLS key file (default "/home/dreamgenics/.docker/key.pem")
+      --tlsverify          Use TLS and verify the remote
+  -v, --version            Print version information and quit
+
+Management Commands:
+  builder     Manage builds
+  config      Manage Docker configs
+  container   Manage containers
+  context     Manage contexts
+  engine      Manage the docker engine
+  image       Manage images
+  network     Manage networks
+  node        Manage Swarm nodes
+  plugin      Manage plugins
+  secret      Manage Docker secrets
+  service     Manage services
+  stack       Manage Docker stacks
+  swarm       Manage Swarm
+  system      Manage Docker
+  trust       Manage trust on Docker images
+  volume      Manage volumes
+
+Commands:
+  attach      Attach local standard input, output, and error streams to a running container
+  build       Build an image from a Dockerfile
+  commit      Create a new image from a container's changes
+  cp          Copy files/folders between a container and the local filesystem
+  create      Create a new container
+  diff        Inspect changes to files or directories on a container's filesystem
+  events      Get real time events from the server
+  exec        Run a command in a running container
+  export      Export a container's filesystem as a tar archive
+  history     Show the history of an image
+  images      List images
+  import      Import the contents from a tarball to create a filesystem image
+  info        Display system-wide information
+  inspect     Return low-level information on Docker objects
+  kill        Kill one or more running containers
+  load        Load an image from a tar archive or STDIN
+  login       Log in to a Docker registry
+  logout      Log out from a Docker registry
+  logs        Fetch the logs of a container
+  pause       Pause all processes within one or more containers
+  port        List port mappings or a specific mapping for the container
+  ps          List containers
+  pull        Pull an image or a repository from a registry
+  push        Push an image or a repository to a registry
+  rename      Rename a container
+  restart     Restart one or more containers
+  rm          Remove one or more containers
+  rmi         Remove one or more images
+  run         Run a command in a new container
+  save        Save one or more images to a tar archive (streamed to STDOUT by default)
+  search      Search the Docker Hub for images
+  start       Start one or more stopped containers
+  stats       Display a live stream of container(s) resource usage statistics
+  stop        Stop one or more running containers
+  tag         Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE
+  top         Display the running processes of a container
+  unpause     Unpause all processes within one or more containers
+  update      Update configuration of one or more containers
+  version     Show the Docker version information
+  wait        Block until one or more containers stop, then print their exit codes
+```
+
+</p>
+</details>
+
+## Imágenes 
+
+### Imágenes oficiales
+
+Las imágenes oficiales se alojan en https://hub.docker.com. Dentro de la web se disponen de versiones de las imagenes creadas por sus autores. 
+
+Para descargar las imagenes usaremos la orden: `docker pull 'nombre'`, que descargará un tag (version) de la imagen. En caso de no indicar el tag, se descargará la última (lastest). En caso de indicar la versión que queremos, se descargará esa:
+
+Comandos básicos:
+- Descarga versión lastest: `docker pull 'nombre'`
+- Descarga versión concreta: `docker pull 'nombre':version`
+- Ver versiones instaladas de 'imagen': `docker images | grep 'imagen'`
+
+Ejemplo de salida:
+```bash
+dreamgenics@debian:~$ docker pull mysql
+Using default tag: latest
+latest: Pulling from library/mysql
+852e50cd189d: Pull complete 
+29969ddb0ffb: Pull complete 
+...
+Digest: sha256:4bb2e81a40e9d0d59bd8e3dc2ba5e1f2197696f6de39a91e90798dd27299b093
+Status: Downloaded newer image for mysql:latest
+docker.io/library/mysql:latest
+```
+
+Las imágenes poseen una serie de capas que pueden ser compartidas por varias imágenes. Si al descargar una nueva versión se observa que se dispone una capa de las imágenes, docker indicará que ya existe, por lo que no se tocan.
+
+En caso de que dispongamos una imagen en su estado latest y esta cambie en el hub, al descargar la nueva version latest, la antigua no se elimina, sino que su tag cambiará  a `<none>`, dado que no puede haber imágenes con un mismo tag. 
+
+### Imágenes propias
+
+Cuando queremos generar imágenes personalizadas, podemos configurar nuestras propias imagenes.
+Para ello:
+
+- Iremos al directorio `~/docker-images`
+- Crearemos un nuevo archivo `DOCKERFILE`
+- Lo editaremos, creando un dockerfile como de otro sistema. Por ejemplo vamos a instalar un centOS con php:
+  - Capa 1 FROM: `FROM centos` > capa base de centos
+  - Capa 2 RUN: `RUN yum install httpd -y` > capa apache php indicando 'yes' a todas las preguntas
+
+El archivo quedaria asi:
+```
+FROM centos
+RUN yum install httpd -y
+```
+
+Con `docker build` podemos construir una imagen a partir de un dockerfile. Se indica el nombre de la imagen resultate y la ruta del dockerfile con el que crear la imagen `docker build --tag <nombreimagenresultante>:<tag> <ruta_dockerfile>`. 
+
+En nuestro ejemplo, como estamos en el mismo directorio del dockerfile:
+- `docker build --tag centOsPhp .` (al no incluir el nombre del tag lo creara como latest)
+
+Una vez creada podemos verla dentro de nuestras imagenes:
+```
+dreamgenics@debian:~/dev/docker$ docker image ls
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+centosphp           latest              6a820eb615fa        46 seconds ago      254MB   <--
+mysql               latest              dd7265748b5d        2 days ago          545MB
+centos              latest              0d120b6ccaa8        3 months ago        215MB
+...
+```
+
+#### Contenedores básicos: correr imagen propia
+
+Ahora podemos correr esta nueva imagen sobre un contenedor, creandolo a partir de la propia imagen.
+Para ello incluiremos la capa CMD en nuestro dockerfile, ya que usará dicho dockerfile para arrancar el contenedor:
+
+Segun internet, para correr apache en primer plano debemos usar `apachectl -FOREGROUND` asi que lo incluimos en el archivo:
+
+```
+FROM centos
+RUN yum install httpd -y
+CMD apachectl -FOREGROUND
+```
+
+Deberemos crear una nueva imagen a partir de este dockerfile ya que sino usa la anterior, que no dispone de la orden CMD. La creamos usando la orden del apartado anterior machacando el tag existente `docker build --tag centOsPhp .`
+
+Si ahora visualizamos la historia de la imagen vemos que salen los cambios realizados:
+
+- `docker history -H centosphp`
+```
+dreamgenics@debian:~/dev/docker$ docker history -H centosphp
+IMAGE               CREATED              CREATED BY                                      SIZE  
+33a19c9a2c35        About a minute ago   /bin/sh -c #(nop)  CMD ["/bin/sh" "-c" "apac…   0B   
+6a820eb615fa        9 minutes ago        /bin/sh -c yum install httpd -y                 39.3MB
+0d120b6ccaa8        3 months ago         /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B
+<missing>           3 months ago         /bin/sh -c #(nop)  LABEL org.label-schema.sc…   0B
+<missing>           3 months ago         /bin/sh -c #(nop) ADD file:538afc0c5c964ce0d…   215MB     
+```
+
+Si ahora queremos arrancar un contenedor con la imagen usaremos: `docker run -d --name <nombrecontendor> -p PORT_SALIDA:PORT_CONTAINER <nombreimagen>:<tagimagen>`, con nuestra imagen seria `docker run -d --name contenedorcentosapache -p 80:80 centosphp`, con lo que podemos acceder al puerto 80 del container usando el puerto 80 de nuestro localhost:
+
+- `docker run -d --name contenedorcentosapache -p 80:80 centosphp`
+```
+dreamgenics@debian:~/dev/docker$ docker run -d --name contenedorcentosapachephp centosphp
+f35b1b70ff8333ce074b4c684a8d639f8688901b377f6ee9a93134718f4dc412
+dreamgenics@debian:~/dev/docker$ docker ps 
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+f35b1b70ff83        centosphp           "/bin/sh -c 'apachec…"   10 seconds ago      Up 8 seconds                            contenedorcentosapachephp
+```
+
+Si ahora vamos al puerto 80 del localhost vemos que está corriendo el apache
+
+## Dockerfile
+Ver https://docs.docker.com/engine/reference/builder/
+
+El dockerfile será el archivo de configuración de las imagenes docker. Crea las capas de la imagen indicando desde el sistema operativo base hasta aplicaciones complejas. Dis
+
+- `FROM`: Indica la **imagen o el sistema operativo desde el que se crea la imagen**
+- `RUN`: Permite ejecutar **órdenes de configuración** como instalar paquetes
+- `CMD`: **Ejecuta ordenes como levantar servicios**, etc...
+- `COPY`: Permite **copiar archivos y carpetas a la imagen**. Se debe indicar qué queremos copiar (tomando como referencia la carpeta donde está el dockerfile) y el destino dentro de la imagen. Por ejemplo, si queremos copiar la carpeta 'carpeta_copia' que está en el mismo directorio a la carpeta `/var/www/html` de la imagen, el dockerfile seria `COPY carpeta_copia /var/www/html`
+- `ADD`: Hace lo mismo que COPY, aunque esto permite incluir una URL como fuente, permitiendo descargar el archivo a la carpeta. Se prefiere usar COPY excepto cuando el origen es una URL.
+- `ENV`: Permite **configurar variables de entorno**. Su sintaxis seria `ENV <nombreVariable> <valorVariable>`. Por ejemplo, una variable `ENV contenido prueba`. Si después queremos ver el valor de la variable, podemos ejecutar un nuevo `RUN` mostrando su valor con `RUN echo "$contenido"`
+- `WORKDIR`: Sirve para **situar el directorio actual**. Por ejemplo, si indicamos `WORKDIR /var/www/html`, a partir de ese punto nos encontraremos en ese directorio.
+- `EXPOSE`: Permite **exponer puertos** de la imagen
+- `LABEL`: Es una **etiqueta**. Puede ir en cualquier lugar del dockerfile. Si el texto lleva espacios deberia estar entre comillas. Hay que tener en cuenta que segun donde lo pongamos forzará la recosntrucción de la imagen, ya que si está por ejemplo por debajo de la creación del apache, entenderá que ha cambiado lo que está por debajo del apache
+- `USER`: Permite definir **que usuario** realiza la acción. Este usuario deberá existir (podemos incluirlo con un `RUN useradd <nombreUser>`). Ojo porque seguramente deberemos definir permisos sobre archivos o carpetas según lo que necesitemos realizar.
+- `VOLUME`: Permite disponer de contenido **persistente** en el contenedor. Para ello deberemos definir qué ruta queremos que sea persistente. Por ejemplo, si queremos que el directorio `/var/www/html` sea persistente deberemos incluir `VOLUME /var/www/html`
+- `CMD`: Se utiliza para "mantener vivo al contenedor", **ejecutando procesos o scripts** que deberían estar en primer plano. Si por ejemplo en lugar de indicar directamente la ejecución de un servicio, creamos un script como este llamado `run.sh`:
+  ```
+  #!/bin/bash
+  echo "Iniciando container..."
+  apachectl -DFOREGROUND
+  ```
+  Lo que haremos será copiarlo con `COPY` y despues ejecutarlo (por ejemplo `CMD sh ./run.sh`)
+- `.dockerignore`: Es un archivo normalmente oculto. Permite ignorar archivos o carpetas al construir una imagen. Se crea en el mismo directorio del dockerfile, ya que todo lo que esté en la carpeta del dockerfile se enviará al construir la imagen.
+
+Aplicandolo a nuestro anterior ejemplo usando COPY:
+
+`dockerfile`
+```
+FROM        centos
+LABEL       version=1.0
+LABEL       description="this is an apache image"
+LABEL       vendor=jrg
+RUN         yum install httpd -y
+WORKDIR     /var/www/html
+COPY        carpeta_copia .
+ENV         contenido prueba
+RUN         echo "$contenido"
+RUN         useradd javier
+USER        javier
+VOLUME      /var/www/html
+EXPOSE      8080
+CMD         apachectl -FOREGROUND
+``` 
