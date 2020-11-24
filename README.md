@@ -402,7 +402,7 @@ El dockerfile será el archivo de configuración de las imagenes docker. Crea la
   Lo que haremos será copiarlo con `COPY` y despues ejecutarlo (por ejemplo `CMD sh ./run.sh`)
 - `.dockerignore`: Es un archivo normalmente oculto. Permite ignorar archivos o carpetas al construir una imagen. Se crea en el mismo directorio del dockerfile, ya que todo lo que esté en la carpeta del dockerfile se enviará al construir la imagen.
 
-Aplicandolo a nuestro anterior ejemplo usando COPY:
+Aplicandolo a nuestro anterior ejemplo usando COPY en lugar de ADD:
 
 `dockerfile`
 ```
@@ -421,3 +421,105 @@ VOLUME      /var/www/html
 EXPOSE      8080
 CMD         apachectl -FOREGROUND
 ``` 
+
+Otro ejemplo de un dockerfile completo:
+```
+FROM nginx                          instala imagen oficial de ngnix
+RUN useradd ricardo                 incluye el usuario ricardo
+COPY fruit /user/share/ngin/html    copia el archivo fruit al directorio
+ENV  archivo docker                 crea la variable de entorno 'archivo' con valor 'docker'
+WORKDIR /usr/share/ngnix/html       situa el directorio de trabajo al /usr/share/ngnix/html
+EXPOSE 90                           expone el puerto 90
+LABEL version=1                     añade el comentario
+RUN echo "Soy $(whoami)"            ejecuta la orden echo "Soy $(whoami)"
+USER root                           cambia el usuario a root
+VOLUME /var/log/nginx               crea la unidad persistente 
+CMD ngnix -g 'daemon off:'          ejecuta el demonio de ngnix
+```
+
+### Buenas prácticas
+
+- La imagen o el servicio que se instala debe ser **efímero**, debe poder destruirse con facilidad
+- **Un servicio por contenedor**. La idea es que el CMD solo corra un servicio para garantizar el aislamiento y la escalabilidad
+- Si no necesitamos archivos pesados, al construir la imagen usar el **.dockerfile** para mantener las imágenes pequeñas
+- Usar **pocas capas**, minimizar las capas de la imagen: Encadenar ordenes con && para tener varios argumentos en una capa. Por ejemplo:
+  ```
+  RUN echo "1" >> /usr/share/html.txt
+  RUN echo "1" >> /usr/share/html.txt
+  ```
+  puedes sustituirse por:
+  ```
+  RUN echo "1" >> /usr/share/html.txt && echo "1" >> /usr/share/html.txt
+  ``` 
+- Separar **argumentos largos** en **varias lineas** usando \: El ejemplo anterior:
+  ```
+  RUN \
+    echo "1" >> /usr/share/html.txt && \
+    echo "2" >> /usr/share/html.txt
+  ``` 
+- **No** instalar paquetes **innecesarios**
+- Usar **labels** para añadir metainformación a la imagen (versiones, etc...)
+
+### Ejemplo de imagen: Imagen con Apache + Php + TSL/SSL
+
+- Necesitaremos un certificado autofirmado. Lo crearemos con `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout docker.key -out docker.crt`. En Common Name incluiremos 'localhost' para que el certificado sea para ese sitio 
+- Esto crea los certificados `docker.crt` y `docker.key` para el certificado autofirmado SSL que deberemos copiar en la imagen. La situamos en el mismo directorio que el `dockerfile` que crearemos
+- Necesitaremos instalar las dependencias: `httpd` (apache), `php-cli php-common` (php), `mod_ssl open_ssl` (SSL). Automaticamente docker instalara el resto de dependencias.
+- Seguiremos el tutorial de https://www.digicert.com/kb/ssl-support/apache-multiple-ssl-certificates-using-sni.htm. Nos indica que debemos modificar la configuracion de vhost de apache incluyendo en el archivo `ssl.conf`:
+  ```
+  <VirtualHost *:443>
+  ServerName www.yoursite.com
+  DocumentRoot /var/www/site
+  SSLEngine on
+  SSLCertificateFile /docker.crt  <-- incluimos nuestro crt
+  SSLCertificateKeyFile /docker.key <-- incluirmos nuestro key
+  SSLCertificateChainFile /path/to/DigiCertCA.crt
+  </VirtualHost>
+  ```
+  Crearemos el archivo `ssl.conf` que define la configuracion anterior. 
+  Esto debe ir dentro de una ruta de apache `/etc/http/conf.d/default.conf` que es donde se define la configuración de SSL.
+  En el documento definimos el puerto 443 como punto de entrada SSL, por lo que deberemos exponer el puerto 443
+- Creamos el dockerfile:
+  ```
+  FROM centos:7
+  # Instala apache, php y las dependencias para ssl
+  RUN \
+    yum -y install \
+    httpd \
+    php-cli php-common \
+    mod_ssl open_ssl
+  RUN echo "<?php phpinfo(); ?>" > /var/www/html/hola.php # Capa para probar si funciona php 
+  COPY ssl.conf /etc/http/conf.d/default.conf
+  COPY docker.crt /docker.crt
+  COPY docker.key /docker.key
+  EXPOSE 443
+  CMD apachectl -DFOREGROUND
+  ```
+- Construimos el `.dockerignore` incluyendo los archivos del mismo directorio del dockerfile que no queremos que estén en la imagen 
+- Construimos la imagen taggeada como `ssl-ok`: `docker build -t apache:ssl-ok .`
+- Corremos el contenedor con la imagen exponiendo el puerto 443 para obligar a usar ssl: `docker run -d -p 443:443 apache:ssl-ok`
+- Vemos si está corriendo: `docker ps`
+- Navegamos a `localhost:80\hola.php` y comprobamos si está activado php (deberia aparecer el info de php)
+
+### Eliminar imagenes
+
+Podemos eliminar imagenes con `docker rmi`:
+- `docker rmi <image1>:<tag> <image2>:<tag>`
+
+Para ver images: `docker images`. Podemos filtrar con `docker images | grep <nombre>` o `docker images -f <atributo>` para filtrar por atributos (por ejemplo, imagenes huérfanas: `docker images -f dangling=true`)
+
+### Cambiar nombre a dockerfile
+
+Si queremos crear una imagen usando un archivo dockerfile con otro nombre que no sea 'dockerfile' , podemos hacerlo con el parametro `-f <nombre dockerfile>`
+
+Por ejemplo, para construir la imagen `test` con un dockerfile llamado `dockerfile-test` usaremos la orden `docker build -t test -f dockerfile-test .`
+
+### Dangling images
+
+A veces tenemos imagenes sin nombre ni tag, mostrando `<none>` en ambos casos. Esto es una dangling image (imagen huérfanas o sin referenciar). 
+
+Cuando creamos una imagen podemos sobreescribir una imagen anterior con el mismo nombre y tag. Esto hace que la imagen anterior pierda su nombre y tag al ser sustituida por la nueva. Esto se debe a que ciertas capas de las imagenes son de solo lectura, por lo que no podemos modificarlas.
+
+Para acabar con este problema podemos definir tags al crear las capas, de forma que crearemos nuevas imagenes con tags distintos.
+
+Para eliminar imagenes huérfanas, podemos filtrarlas por `docker images -f dangling=true`. Para borrarlas podemos borrarlas con el id `docker rmi <id>`, o podemos usar `docker images -f dangling=true -q | xargs docker rmi` (filtramos con `-f`, mostramos solo los ids con `-q` y con `| xargs docker rmi`, pasamos la lista que devuelve `-q` como input a la orden `docker rmi` (esto se hace con `| xargs`))
