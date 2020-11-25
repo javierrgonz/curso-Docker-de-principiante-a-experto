@@ -21,7 +21,7 @@ Las capas que dispone son:
 Estas capas son de solo lectura (Read Only - RO), y se definen en el archivo DOCKERFILE. 
 Un DOCKERFILE es un archivo de texto plano que define las distintas capas del contenedor
 
-```
+```dockerfile
 FROM centos:7						Instala centos7
 RUN  yum -y install httpd			Instala apache
 CMD	["apachedtl","-DFOREGROUND"]	Arranca apache en primer plano
@@ -54,7 +54,7 @@ Instalar Docker: `Config file `/lib/systemd/system/docker.service`
 <details><summary>how</summary>
 <p>
 
-```
+```bash
 # Instalar Docker
 
 Config file /lib/systemd/system/docker.service
@@ -195,7 +195,7 @@ Config file /lib/systemd/system/docker.service
 <details>
 <p>
 
-```
+```bash
 Options:
       --config string      Location of client config files (default "/home/dreamgenics/.docker")
   -c, --context string     Name of the context to use to connect to the daemon (overrides DOCKER_HOST env var and default
@@ -327,7 +327,7 @@ En nuestro ejemplo, como estamos en el mismo directorio del dockerfile:
 - `docker build --tag centOsPhp .` (al no incluir el nombre del tag lo creara como latest)
 
 Una vez creada podemos verla dentro de nuestras imagenes:
-```
+```bash
 dreamgenics@debian:~/dev/docker$ docker image ls
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
 centosphp           latest              6a820eb615fa        46 seconds ago      254MB   <--
@@ -354,7 +354,7 @@ Deberemos crear una nueva imagen a partir de este dockerfile ya que sino usa la 
 Si ahora visualizamos la historia de la imagen vemos que salen los cambios realizados:
 
 - `docker history -H centosphp`
-```
+```bash
 dreamgenics@debian:~/dev/docker$ docker history -H centosphp
 IMAGE               CREATED              CREATED BY                                      SIZE  
 33a19c9a2c35        About a minute ago   /bin/sh -c #(nop)  CMD ["/bin/sh" "-c" "apac…   0B   
@@ -367,7 +367,7 @@ IMAGE               CREATED              CREATED BY                             
 Si ahora queremos arrancar un contenedor con la imagen usaremos: `docker run -d --name <nombrecontendor> -p PORT_SALIDA:PORT_CONTAINER <nombreimagen>:<tagimagen>`, con nuestra imagen seria `docker run -d --name contenedorcentosapache -p 80:80 centosphp`, con lo que podemos acceder al puerto 80 del container usando el puerto 80 de nuestro localhost:
 
 - `docker run -d --name contenedorcentosapache -p 80:80 centosphp`
-```
+```bash
 dreamgenics@debian:~/dev/docker$ docker run -d --name contenedorcentosapachephp centosphp
 f35b1b70ff8333ce074b4c684a8d639f8688901b377f6ee9a93134718f4dc412
 dreamgenics@debian:~/dev/docker$ docker ps 
@@ -377,7 +377,7 @@ f35b1b70ff83        centosphp           "/bin/sh -c 'apachec…"   10 seconds ag
 
 Si ahora vamos al puerto 80 del localhost vemos que está corriendo el apache
 
-## Dockerfile
+### Dockerfile
 Ver https://docs.docker.com/engine/reference/builder/
 
 El dockerfile será el archivo de configuración de las imagenes docker. Crea las capas de la imagen indicando desde el sistema operativo base hasta aplicaciones complejas. Dis
@@ -394,7 +394,7 @@ El dockerfile será el archivo de configuración de las imagenes docker. Crea la
 - `USER`: Permite definir **que usuario** realiza la acción. Este usuario deberá existir (podemos incluirlo con un `RUN useradd <nombreUser>`). Ojo porque seguramente deberemos definir permisos sobre archivos o carpetas según lo que necesitemos realizar.
 - `VOLUME`: Permite disponer de contenido **persistente** en el contenedor. Para ello deberemos definir qué ruta queremos que sea persistente. Por ejemplo, si queremos que el directorio `/var/www/html` sea persistente deberemos incluir `VOLUME /var/www/html`
 - `CMD`: Se utiliza para "mantener vivo al contenedor", **ejecutando procesos o scripts** que deberían estar en primer plano. Si por ejemplo en lugar de indicar directamente la ejecución de un servicio, creamos un script como este llamado `run.sh`:
-  ```
+  ```bash
   #!/bin/bash
   echo "Iniciando container..."
   apachectl -DFOREGROUND
@@ -405,7 +405,7 @@ El dockerfile será el archivo de configuración de las imagenes docker. Crea la
 Aplicandolo a nuestro anterior ejemplo usando COPY en lugar de ADD:
 
 `dockerfile`
-```
+```dockerfile
 FROM        centos
 LABEL       version=1.0
 LABEL       description="this is an apache image"
@@ -423,7 +423,7 @@ CMD         apachectl -FOREGROUND
 ``` 
 
 Otro ejemplo de un dockerfile completo:
-```
+```dockerfile
 FROM nginx                          instala imagen oficial de ngnix
 RUN useradd ricardo                 incluye el usuario ricardo
 COPY fruit /user/share/ngin/html    copia el archivo fruit al directorio
@@ -436,70 +436,6 @@ USER root                           cambia el usuario a root
 VOLUME /var/log/nginx               crea la unidad persistente 
 CMD ngnix -g 'daemon off:'          ejecuta el demonio de ngnix
 ```
-
-### Buenas prácticas
-
-- La imagen o el servicio que se instala debe ser **efímero**, debe poder destruirse con facilidad
-- **Un servicio por contenedor**. La idea es que el CMD solo corra un servicio para garantizar el aislamiento y la escalabilidad
-- Si no necesitamos archivos pesados, al construir la imagen usar el **.dockerfile** para mantener las imágenes pequeñas
-- Usar **pocas capas**, minimizar las capas de la imagen: Encadenar ordenes con && para tener varios argumentos en una capa. Por ejemplo:
-  ```
-  RUN echo "1" >> /usr/share/html.txt
-  RUN echo "1" >> /usr/share/html.txt
-  ```
-  puedes sustituirse por:
-  ```
-  RUN echo "1" >> /usr/share/html.txt && echo "1" >> /usr/share/html.txt
-  ``` 
-- Separar **argumentos largos** en **varias lineas** usando \: El ejemplo anterior:
-  ```
-  RUN \
-    echo "1" >> /usr/share/html.txt && \
-    echo "2" >> /usr/share/html.txt
-  ``` 
-- **No** instalar paquetes **innecesarios**
-- Usar **labels** para añadir metainformación a la imagen (versiones, etc...)
-
-### Ejemplo de imagen: Imagen con Apache + Php + TSL/SSL
-
-- Necesitaremos un certificado autofirmado. Lo crearemos con `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout docker.key -out docker.crt`. En Common Name incluiremos 'localhost' para que el certificado sea para ese sitio 
-- Esto crea los certificados `docker.crt` y `docker.key` para el certificado autofirmado SSL que deberemos copiar en la imagen. La situamos en el mismo directorio que el `dockerfile` que crearemos
-- Necesitaremos instalar las dependencias: `httpd` (apache), `php-cli php-common` (php), `mod_ssl open_ssl` (SSL). Automaticamente docker instalara el resto de dependencias.
-- Seguiremos el tutorial de https://www.digicert.com/kb/ssl-support/apache-multiple-ssl-certificates-using-sni.htm. Nos indica que debemos modificar la configuracion de vhost de apache incluyendo en el archivo `ssl.conf`:
-  ```
-  <VirtualHost *:443>
-  ServerName www.yoursite.com
-  DocumentRoot /var/www/site
-  SSLEngine on
-  SSLCertificateFile /docker.crt  <-- incluimos nuestro crt
-  SSLCertificateKeyFile /docker.key <-- incluirmos nuestro key
-  SSLCertificateChainFile /path/to/DigiCertCA.crt
-  </VirtualHost>
-  ```
-  Crearemos el archivo `ssl.conf` que define la configuracion anterior. 
-  Esto debe ir dentro de una ruta de apache `/etc/http/conf.d/default.conf` que es donde se define la configuración de SSL.
-  En el documento definimos el puerto 443 como punto de entrada SSL, por lo que deberemos exponer el puerto 443
-- Creamos el dockerfile:
-  ```
-  FROM centos:7
-  # Instala apache, php y las dependencias para ssl
-  RUN \
-    yum -y install \
-    httpd \
-    php-cli php-common \
-    mod_ssl open_ssl
-  RUN echo "<?php phpinfo(); ?>" > /var/www/html/hola.php # Capa para probar si funciona php 
-  COPY ssl.conf /etc/http/conf.d/default.conf
-  COPY docker.crt /docker.crt
-  COPY docker.key /docker.key
-  EXPOSE 443
-  CMD apachectl -DFOREGROUND
-  ```
-- Construimos el `.dockerignore` incluyendo los archivos del mismo directorio del dockerfile que no queremos que estén en la imagen 
-- Construimos la imagen taggeada como `ssl-ok`: `docker build -t apache:ssl-ok .`
-- Corremos el contenedor con la imagen exponiendo el puerto 443 para obligar a usar ssl: `docker run -d -p 443:443 apache:ssl-ok`
-- Vemos si está corriendo: `docker ps`
-- Navegamos a `localhost:80\hola.php` y comprobamos si está activado php (deberia aparecer el info de php)
 
 ### Eliminar imagenes
 
@@ -523,3 +459,164 @@ Cuando creamos una imagen podemos sobreescribir una imagen anterior con el mismo
 Para acabar con este problema podemos definir tags al crear las capas, de forma que crearemos nuevas imagenes con tags distintos.
 
 Para eliminar imagenes huérfanas, podemos filtrarlas por `docker images -f dangling=true`. Para borrarlas podemos borrarlas con el id `docker rmi <id>`, o podemos usar `docker images -f dangling=true -q | xargs docker rmi` (filtramos con `-f`, mostramos solo los ids con `-q` y con `| xargs docker rmi`, pasamos la lista que devuelve `-q` como input a la orden `docker rmi` (esto se hace con `| xargs`))
+
+### Buenas prácticas
+
+- La imagen o el servicio que se instala debe ser **efímero**, debe poder destruirse con facilidad
+- **Un servicio por contenedor**. La idea es que el CMD solo corra un servicio para garantizar el aislamiento y la escalabilidad
+- Si no necesitamos archivos pesados, al construir la imagen usar el **.dockerfile** para mantener las imágenes pequeñas
+- Usar **pocas capas**, minimizar las capas de la imagen: Encadenar ordenes con && para tener varios argumentos en una capa. Por ejemplo:
+  ```dockerfile
+  RUN echo "1" >> /usr/share/html.txt
+  RUN echo "1" >> /usr/share/html.txt
+  ```
+  puedes sustituirse por:
+  ```dockerfile
+  RUN echo "1" >> /usr/share/html.txt && echo "1" >> /usr/share/html.txt
+  ``` 
+- Separar **argumentos largos** en **varias lineas** usando \: El ejemplo anterior:
+  ```dockerfile
+  RUN \
+    echo "1" >> /usr/share/html.txt && \
+    echo "2" >> /usr/share/html.txt
+  ``` 
+- **No** instalar paquetes **innecesarios**
+- Usar **labels** para añadir metainformación a la imagen (versiones, etc...)
+
+### Ejemplo de imagen: Imagen con Apache + Php + TSL/SSL
+
+- Necesitaremos un certificado autofirmado. Lo crearemos con `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout docker.key -out docker.crt`. En Common Name incluiremos 'localhost' para que el certificado sea para ese sitio 
+- Esto crea los certificados `docker.crt` y `docker.key` para el certificado autofirmado SSL que deberemos copiar en la imagen. La situamos en el mismo directorio que el `dockerfile` que crearemos
+- Necesitaremos instalar las dependencias: `httpd` (apache), `php-cli php-common` (php), `mod_ssl open_ssl` (SSL). Automaticamente docker instalara el resto de dependencias.
+- Seguiremos el tutorial de https://www.digicert.com/kb/ssl-support/apache-multiple-ssl-certificates-using-sni.htm. Nos indica que debemos modificar la configuracion de vhost de apache incluyendo en el archivo `ssl.conf`:
+  ```xml
+  <VirtualHost *:443>
+  ServerName www.yoursite.com
+  DocumentRoot /var/www/site
+  SSLEngine on
+  SSLCertificateFile /docker.crt  <-- incluimos nuestro crt
+  SSLCertificateKeyFile /docker.key <-- incluirmos nuestro key
+  SSLCertificateChainFile /path/to/DigiCertCA.crt
+  </VirtualHost>
+  ```
+  Crearemos el archivo `ssl.conf` que define la configuracion anterior. 
+  Esto debe ir dentro de una ruta de apache `/etc/http/conf.d/default.conf` que es donde se define la configuración de SSL.
+  En el documento definimos el puerto 443 como punto de entrada SSL, por lo que deberemos exponer el puerto 443
+- Creamos el dockerfile: 
+  ```dockerfile
+  FROM centos:7
+  # Instala apache, php y las dependencias para ssl
+  RUN \
+    yum -y install \
+    httpd \
+    php-cli php-common \
+    mod_ssl open_ssl
+  RUN echo "<?php phpinfo(); ?>" > /var/www/html/hola.php # Capa para probar si funciona php 
+  COPY ssl.conf /etc/http/conf.d/default.conf
+  COPY docker.crt /docker.crt
+  COPY docker.key /docker.key
+  EXPOSE 443
+  CMD apachectl -DFOREGROUND
+  ```
+- Construimos el `.dockerignore` incluyendo los archivos del mismo directorio del dockerfile que no queremos que estén en la imagen 
+- Construimos la imagen taggeada como `ssl-ok`: `docker build -t apache:ssl-ok .`
+- Corremos el contenedor con la imagen exponiendo el puerto 443 para obligar a usar ssl: `docker run -d -p 443:443 apache:ssl-ok`
+- Vemos si está corriendo: `docker ps`
+- Navegamos a `localhost:80\hola.php` y comprobamos si está activado php (deberia aparecer el info de php)
+
+### Ejemplo de imagen: Nginx y PHP-FPM
+
+Un ejemplo de dockerfile con Nginx y PHP-FPM seria: 
+
+```dockerfile
+FROM centos:7
+COPY ./conf/nginx.repo /etc/yum.repos.d/nginx.repo
+RUN                                                                          \
+  yum -y install nginx --enablerepo=nginx                                 && \
+  yum -y install  https://repo.ius.io/ius-release-el7.rpm                 && \
+  yum -y install                                                             \
+    php71u-fpm                                                               \
+    php71u-cli                                                               \
+    php71u-mysqlnd                                                           \
+    php71u-soap                                                              \
+    php71u-xml                                                               \
+    php71u-zip                                                               \
+    php71u-json                                                              \
+    php71u-mcrypt                                                            \
+    php71u-mbstring                                                          \
+    php71u-zip                                                               \
+    php71u-gd                                                                \
+    --enablerepo=ius-archive && yum clean all
+
+EXPOSE 80 443
+VOLUME /var/www/html /var/log/nginx /var/log/php-fpm /var/lib/php-fpm
+COPY ./conf/nginx.conf /etc/nginx/conf.d/default.conf
+COPY ./bin/start.sh /start.sh
+COPY index.php /var/www/html/index.php
+RUN chmod +x /start.sh
+CMD /start.sh
+```
+
+### Multi-Stage build - imagenes con maven, java y similares
+
+Desde las ultimas versiones, podemos usar varios FROM desde el mismo dockerfile, por ejemplo compilar un java y usar maven. El último FROM será el que se tenga en cuenta finalmente para construir la imagen.
+
+Por ejemplo, una imagen que tenga un maven para construir un jar:
+
+`dockerfile`:
+```dockerfile
+# 1 Maven crea el jar inicial
+FROM maven:3.5-alpine as builder
+COPY app /app
+RUN  cd /app && mvn package
+# 2 Java que ejecuta el jar `my-app-1.0-SNAPSHOT.jar` creado antes
+FROM openjdk:8-alpine
+COPY --from=builder /app/target/my-app-1.0-SNAPSHOT.jar /opt/app.jar
+CMD  java -jar /opt/app.jar
+```
+
+En este caso, la imagen resultante elimina las dependencias que necesita maven para crear el jar, ya que usa solo la ultima parte (el segundo FROM) para construir la imagen final. Docker asume que los pasos anteriores son temporales.
+
+Para entender esto podemos usar el comando `fallocate` que crea un archivo de texto con un peso especificado por el usuario
+
+```dockerfile
+# Creamos la imagen con centos y le añadimos los archivos de 10, 20 y 30 megas
+FROM centos as test
+RUN fallocate -l 10M /opt/file1
+RUN fallocate -l 20M /opt/test2
+RUN fallocate -l 30M /opt/test3
+# Aqui pesaria unos 230 megas. Gracias al multi-stage build, el nuevo FROM hace que iniciemos 
+# desde alpine, que pesa unos 20 megas en total
+FROM alpine
+COPY --from=test /opt/test2 /opt/myfile
+```
+
+Si vemos el peso definitivo de la imagen que crea este dockerfile, vemos que corresponde al de la imagen alpine y el archivo test2, sin el peso de centos y los 3 archivos creados.
+
+## Contenedores
+
+- Los contenedores son instancias de ejecución de imágenes. Los contenedores ejecutan las imágenes, pudiendo crear distintos contenedores basandonos en una sola imagen.
+- Son temporales, por lo que nunca deberiamos hacer cambios en los contenedores.
+- No obstante, aunque las capas de las imagenes son de solo lectura, los contenedores son capas de lectura-escritura. 
+
+### Comandos básicos sobre contenedores
+
+- Listar contenedores en ejecucion: `docker ps`
+- Listar todos los contenedores (activos y detenidos): `docker ps -a`
+- Listar ids de los contenedores: `docker ps -q`
+- Correr contenedor en segundo plano (`-d`) a partir de imagen: `docker run -d <imagen>`
+- Correr contenedor seteando nombre (`--name`): `docker run -d --name <nombre> <imagen>`
+- Correr contenedor con mapeo de puertos (`-p`) : `docker run -d -p <puertoHost>:<puertoContenedor> <imagen>`
+- Correr contenedor con una imagen de un SO (`-dti`): `docker run -dti <imagen>`
+- Arrancar contenedor: `docker start <nombreContenedor>` / `docker start <idContenedor>`
+- Detener contenedor: `docker stop <nombreContenedor>` / `docker stop <idContenedor>`
+- Reiniciar contenedor: `docker restart <nombreContenedor>` / `docker restart <idContenedor>`
+- Borrar un contenedor forzando (`-f`) por nombre: `docker rm -f <nombrecontenedor1> <nombrecontenedor2>` 
+- Borrar todos los contenedores: `docker ps -q | xargs docker rm -f`
+- Reemplazar nombre a contenedor: `docker rename <nombreAntiguo> <nuevoNombre>`
+- Ejecutar algo dentro del contenedor: `docker exec -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor (`-ti` terminal interactivo / `<tipoTerminal>` tipo de terminal. Puede ser `bash` o `sh`))
+- Ejecutar algo como root dentro del contenedor: `docker exec -u root -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario root (`-u` user)
+- Ejecutar algo como otro usuario dentro del contenedor: `docker exec -u <nombreUsuario> -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario indicado (`-u` user). Deberá existir el usuario, indicándolo en el dockerfile.
+- Setear variable de entorno en tiempo de ejecución del contenedor: Aparte de la creacion en el dockerfile, podemos crear una variable de entorno dentro de un contenedor al correrlo con `-e -e "nombreVariable=valorVariable"`: `docker run -d -e "nombreVariable=valorVariable"`
+
+
