@@ -601,22 +601,48 @@ Si vemos el peso definitivo de la imagen que crea este dockerfile, vemos que cor
 
 ### Comandos básicos sobre contenedores
 
-- Listar contenedores en ejecucion: `docker ps`
-- Listar todos los contenedores (activos y detenidos): `docker ps -a`
-- Listar ids de los contenedores: `docker ps -q`
-- Correr contenedor en segundo plano (`-d`) a partir de imagen: `docker run -d <imagen>`
-- Correr contenedor seteando nombre (`--name`): `docker run -d --name <nombre> <imagen>`
-- Correr contenedor con mapeo de puertos (`-p`) : `docker run -d -p <puertoHost>:<puertoContenedor> <imagen>`
-- Correr contenedor con una imagen de un SO (`-dti`): `docker run -dti <imagen>`
-- Arrancar contenedor: `docker start <nombreContenedor>` / `docker start <idContenedor>`
-- Detener contenedor: `docker stop <nombreContenedor>` / `docker stop <idContenedor>`
-- Reiniciar contenedor: `docker restart <nombreContenedor>` / `docker restart <idContenedor>`
-- Borrar un contenedor forzando (`-f`) por nombre: `docker rm -f <nombrecontenedor1> <nombrecontenedor2>` 
-- Borrar todos los contenedores: `docker ps -q | xargs docker rm -f`
-- Reemplazar nombre a contenedor: `docker rename <nombreAntiguo> <nuevoNombre>`
-- Ejecutar algo dentro del contenedor: `docker exec -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor (`-ti` terminal interactivo / `<tipoTerminal>` tipo de terminal. Puede ser `bash` o `sh`))
-- Ejecutar algo como root dentro del contenedor: `docker exec -u root -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario root (`-u` user)
-- Ejecutar algo como otro usuario dentro del contenedor: `docker exec -u <nombreUsuario> -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario indicado (`-u` user). Deberá existir el usuario, indicándolo en el dockerfile.
-- Setear variable de entorno en tiempo de ejecución del contenedor: Aparte de la creacion en el dockerfile, podemos crear una variable de entorno dentro de un contenedor al correrlo con `-e -e "nombreVariable=valorVariable"`: `docker run -d -e "nombreVariable=valorVariable"`
+- **Listado**:
+  - Listar contenedores en ejecucion: `docker ps`
+  - Listar todos los contenedores (activos y detenidos): `docker ps -a`
+  - Listar ids de los contenedores: `docker ps -q`
+- **Correr contenedores**:
+  - Correr contenedor en segundo plano (`-d`) a partir de imagen: `docker run -d <imagen>`
+  - Correr contenedor seteando nombre (`--name`): `docker run -d --name <nombre> <imagen>`
+  - Correr contenedor con mapeo de puertos (`-p`) : `docker run -d -p <puertoHost>:<puertoContenedor> <imagen>`
+  - Correr contenedor con una imagen de un SO (`-dti`): `docker run -dti <imagen>`
+- **Arrancar/cerrar contenedores**
+  - Arrancar contenedor: `docker start <nombreContenedor>` / `docker start <idContenedor>`
+  - Detener contenedor: `docker stop <nombreContenedor>` / `docker stop <idContenedor>`
+  - Reiniciar contenedor: `docker restart <nombreContenedor>` / `docker restart <idContenedor>`
+- **Borrado / renombrado de contenedores**:
+  - Borrar un contenedor forzando (`-f`) por nombre: `docker rm -f <nombrecontenedor1> <nombrecontenedor2>` 
+  - Borrar todos los contenedores: `docker ps -q | xargs docker rm -f`  
+  - Reemplazar nombre a contenedor: `docker rename <nombreAntiguo> <nuevoNombre>`
+- **Ingresar dentro de contenedores**:
+  - Ejecutar algo dentro del contenedor: `docker exec -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor (`-ti` terminal interactivo / `<tipoTerminal>` tipo de terminal. Puede ser `bash` o `sh`))
+  - Ejecutar algo como root dentro del contenedor: `docker exec -u root -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario root (`-u` user)
+  - Ejecutar algo como otro usuario dentro del contenedor: `docker exec -u <nombreUsuario> -ti <nombreContenedor> <tipoTerminal>`. Esto abre una terminal dentro del contenedor con el usuario indicado (`-u` user). Deberá existir el usuario, indicándolo en el dockerfile. En caso de no indicar el usuario, se ingresará con el último usuario definido en el dockerfile mediante un `USER`, y si no se ha seleccionado ningún usuario en el dockerfile, nos loguearemos con root. 
+- **Variables de entorno**:
+  - Setear variable de entorno en tiempo de ejecución del contenedor: Aparte de la creacion en el dockerfile, podemos crear una variable de entorno dentro de un contenedor al correrlo con `-e -e "nombreVariable=valorVariable"`: `docker run -d -e "nombreVariable=valorVariable"`
+- **Recursos**:
+  - Ver recursos del contenedor: `docker stats <nombreContenedor>`
+  - Limitar memoria RAM (`-m`) (por ejemplo 500mb): `docker run -d -m "500mb" --name <nombreContenedor> <nombreImagen>`
+  - Limitar numero de cpus: `docker run -d --cpuset-cpus <numeroCpus> --name <nombreContenedor> <nombeImagen>` 
+- **Copiar archivos dentro del contenedor**:
+  - Copiar un archivo dentro de un contenedor: `docker cp <rutaArchivoACopiar> <nombreContenedor>:<directorioDestino>`
+  - Copiar archivo desde un contenedor: `docker cp <nombreContenedor>:<rutaDelArchivo> <rutaDestinoEnHost>`
+- **Construir imagen a partir de un contenedor**
+  - Usaremos `docker commit` para hacer una imagen a partir de un estado de un contenedor, por ejemplo  para guardar si se ha creado alguna configuracion o se ha copiado algun archivo. Ojo: Solo se guardarán archivos que estén **FUERA** de los volúmenes que hemos definido en el dockerfile: `docker commit <contenedor> <nombreImagenResultante>`. 
+- **Sobreescribir CMD del dockerfile**:
+  - Si al arrancar el contenedor con `docker run`, sobreescribiremos la orden `CMD` definida en el dockerfile: `docker run -d <nombreImage> <nuevaOrdenCMD>` - *Ejemplo*: `docker run -dti centos echo hola mundo`
+- **Contenedor autodestruible**:
+  - Docker tiene una opcion `--rm` que indica que el contenedor debe autodestruirse cuando salgamos de la sesion. Deberemos quitar el parametro `-d` ya que no debe correr en el fondo. Lo que hacemos es que al arrancar el contenedor entramos en su bash (quitando el -d) y al salir se autodestruya
+- **Cambiar documentRoot**
+  - Si queremos ver el documentRoot del usuario `root` (con `docker info | grep -i root`), nos devolverá el directorio de trabajo por defecto del usuario root. Para cambiarlo a otra ubicación 
+    - Cambiamos el archivo de configuración de `/lib/systemd/system/docker.service`, modificando la linea `ExecStart=/usr/bin/dockerd` incluyendo `--data-root <rutaNueva>`
+    - Hacemos que el daemon de `daemon-loader` lea los cambios con `systemctl daemon-reload`
+    - Reiniciamos el servicio con `systemctl restart docker`
+    - Movemos la carpeta `docker/` a la nueva ruta de la carpeta
+    - Volvemos a leer los cambios del `daemon-loader` y del servicio de docker `systemctl restart docker`
 
 
