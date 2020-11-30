@@ -645,4 +645,10 @@ Si vemos el peso definitivo de la imagen que crea este dockerfile, vemos que cor
     - Movemos la carpeta `docker/` a la nueva ruta de la carpeta
     - Volvemos a leer los cambios del `daemon-loader` y del servicio de docker `systemctl restart docker`
 
+## Volúmenes
+
+Son una herramienta que permiten guardar datos de forma persistente. Tenemos tres tipos de volúmenes:
+- **Host**: Volúmenes que se almacenan en el docker host, en el propio sistema del host
+- **Anonymous**: No definimos una carpeta pero docker crea una random
+- **Named Volumes**: Carpetas con nombre definido, manejadas por Docker
 
