@@ -616,6 +616,7 @@ Si vemos el peso definitivo de la imagen que crea este dockerfile, vemos que cor
   - Reiniciar contenedor: `docker restart <nombreContenedor>` / `docker restart <idContenedor>`
 - **Borrado / renombrado de contenedores**:
   - Borrar un contenedor forzando (`-f`) por nombre: `docker rm -f <nombrecontenedor1> <nombrecontenedor2>` 
+  - Borrar un contenedor forzando (`-f`) por nombre, incluyendo el borrado de volumenes (`-v`): `docker rm -fv <nombrecontenedor1> <nombrecontenedor2>` 
   - Borrar todos los contenedores: `docker ps -q | xargs docker rm -f`  
   - Reemplazar nombre a contenedor: `docker rename <nombreAntiguo> <nuevoNombre>`
 - **Ingresar dentro de contenedores**:
@@ -644,11 +645,63 @@ Si vemos el peso definitivo de la imagen que crea este dockerfile, vemos que cor
     - Reiniciamos el servicio con `systemctl restart docker`
     - Movemos la carpeta `docker/` a la nueva ruta de la carpeta
     - Volvemos a leer los cambios del `daemon-loader` y del servicio de docker `systemctl restart docker`
+- **Volumenes**
+  - Ver volumenes: `docker volume ls`
+  - Crear volumen: `docker volume create <nombre>`
+  - Borrar volumen: `docker volume rm <nombre>`
+  - Ver volumenes huerfanos (sin contenedor referenciado (dangling)): `docker volume ls -f dangling=true`
+  - Borrar volumenes dangling: `docker volume ls -f dangling=true -q | xargs docker volume rm`
 
 ## Volúmenes
 
 Son una herramienta que permiten guardar datos de forma persistente. Tenemos tres tipos de volúmenes:
-- **Host**: Volúmenes que se almacenan en el docker host, en el propio sistema del host
-- **Anonymous**: No definimos una carpeta pero docker crea una random
-- **Named Volumes**: Carpetas con nombre definido, manejadas por Docker
 
+- **Host**: Volúmenes que se almacenan en el docker host, en el propio sistema del host. 
+- **Anonymous**: No definimos una carpeta pero docker crea una random, donde persiste la información
+- **Named Volumes**: Carpetas con nombre definido, manejadas por Docker. No son carpetas nuestras, sino manejadas por Docker, pero a diferencia de los anonymous, si tienen nombre.
+
+### Volumenes host
+
+Mysql guarda la informacion en la carpeta `/var/lib/mysql`. En caso de salvar esta carpeta salvariamos toda la info
+
+- Crearemos una carpeta en la maquina host (en este caso `/opt/mysql`)
+- Creamos el contenedor de mysql mapeando la carpeta del contenedor que queremos guardar a la carpeta de nuestro host con `-v <carpetaHost>:<carpetaContenedor>`: `docker run -d --name db -p 3306:3306 -e "MYSQL_ROOT_PASSWORD=1234" -v /opt/mysql:/var/lib/myslq mysql5.7`
+
+Todo lo que creemos en la carpeta del contenedor se guarda en la carpeta mapeada del host
+
+### Volumenes anónimos
+
+En este caso solo indicamos el volumen del contenedor con el mismo parámetro `-v <directorioContenedor>`. Por ejemplo: `docker run -d --name db -p 3306:3306 -e "MYSQL_ROOT_PASSWORD=1234" -v /var/lib/myslq mysql5.7`
+
+Lo que hace docker es crear una carpeta en `/home/<user>/docker/volumes`, asociado al contenedor. Para ver que directorio se asocia, podemos usar la orden `docker inspect`, pudiendo filtrar por el nombre de la carpeta, usando `docker inspect <nombreContenedor> | grep <texto>`.
+
+El problema de los volumenes anonimos, ademas del nombre de la carpeta anonima, es que si forzamos el borrado del contenedor y sus volumenes (con el parametro `-fv`) se borra también la carpeta.
+
+Se podría convertir en una carpeta de host si lo mapeamos al lvantar el contenedor.
+
+Se podria crear en un `dockerfile` mediante la orden VOLUME. Se pueden crear volumenes anonimos (se crearan en el documentroot del contenedor, visible con `docker info | grep -i root`)
+
+```dockerfile
+FROM    centos
+VOLUME  /opt/     <- Crea un volumen anonimo al crear el contenido
+```
+
+### Volumenes nombrados
+
+Para crear volumenes nombrados podemos:
+
+- Crearemos un volumen en la maquina host mediante `docker volume create <nombreVolumen>`
+- Creamos el contenedor de mysql mapeando la carpeta del contenedor que queremos guardar al volumen de nuestro host con `-v <volumenHost>:<carpetaContenedor>`: `docker run -d --name db -p 3306:3306 -e "MYSQL_ROOT_PASSWORD=1234" -v volumen:/var/lib/myslq mysql5.7`
+
+En este caso al borrar el contenedor no se borran los volumenes.
+
+### Dangling volumes
+
+En el caso de los volumenes pasa lo mismo que las imagenes. Si creamos varios contenedores con volumenes anonimos, al eliminar los contenedores sin indicar que se eliminen los volumenes, tendremos dichos volumenes sin referenciar a un contenedor.
+
+### Compartir volumenes entre contenedores
+
+Un volumen puede compartirse entre uno o mas contenedores. Para ello, al instanciar el contenedor deberemos indicar el volumen/carpeta a compartir en ambos contenedores:
+
+- `docker run -d --name conenedor1 -v <volumenComun>/<directorioAGuardar1> <nombreImagen1>:<versionImagen>`
+- `docker run -d --name conenedor2 -v <volumenComun>/<directorioAGuardar2> <nombreImagen2>:<versionImagen>`
