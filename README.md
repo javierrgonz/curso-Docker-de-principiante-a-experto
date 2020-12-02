@@ -705,3 +705,75 @@ Un volumen puede compartirse entre uno o mas contenedores. Para ello, al instanc
 
 - `docker run -d --name conenedor1 -v <volumenComun>/<directorioAGuardar1> <nombreImagen1>:<versionImagen>`
 - `docker run -d --name conenedor2 -v <volumenComun>/<directorioAGuardar2> <nombreImagen2>:<versionImagen>`
+
+## Redes
+
+Existen distintos tipos de redes en docker. Por defecto, la conexion se llama `docker0` y ya se asigna una ip por defecto. Al levantar una imagen, se asigna una ip con la base de esta ip, visible en el apartado `IPAddress` del docker info (también aparece la puerta de entrada `GateWay` que será la ip asignada a la red de docker). 
+
+Por ejemplo, si la ip de la conexion `docker0` es 10.99.34.10, las ips de los contenedores sera 10.99.34.XX y la mascara de subred sera la ip 10.99.34.10.
+
+Asimismo, docker crea una red donde se conectan todos los contenedores, llamándose `bridge` la creada por defecto. Podemos crear redes personalizadas, donde a diferencia de la red por defecto, me permite conectar o hacer ping a ls contenedores por su nombre, en lugar de por su ip.
+
+Existen distintos tipos de redes dentro de docker:
+
+- **Bridge**: Tipo por defecto
+- **Host**: Es la red de nuestra maquina host. Ya existe de forma predeterminada, y podemos conectar contenedores a esta red. En este caso heredará todos los componentes de la red actual del host
+- **None**: La red `none` existe por defecto en docker. Los contenedores que metamos ahi no tendrán red.
+- **Overlay**: 
+
+### Comandos basicos de redes
+
+- Help de docker network:
+  ```bash
+  Usage:  docker network COMMAND
+    Manage networks
+  Commands:
+    connect     Connect a container to a network
+    create      Create a network
+    disconnect  Disconnect a container from a network
+    inspect     Display detailed information on one or more networks
+    ls          List networks
+    prune       Remove all unused networks
+    rm          Remove one or more networks
+  Run 'docker network COMMAND --help' for more information on a command.
+  ```
+- **Ver interfaz de red de docker con su ip**: `ip a | grep docker`
+- **Ver la red de docker creada (por defecto se llama `bridge`)**: `docker network ls`. Filtrada: `docker network ls | grep <palabraAfiltrar>`
+- **Muestra la informacion de la red. El parametro |less indica que queremos ver el archivo desde el principio**: `docker network inspect <nombreRed> [ |less ]` 
+- **Crea una red personalizada con distintos parametros (tipo, ip, gateway)**:`docker network create [-d <tipoDriver>] [--subnet <ip>] [--gateway <ipGateway] <nombreRed>`
+- **Agregar contenedor a una red distinta a la por defecto**: `docker run --network <nombreRed> ...` 
+- **Conectar contenedores en distintas redes**: Si tenemos contenedores en distintas redes y queremos que se comuniquen, podemos usar `docker network connect`, de forma que podamos conectar un contenedor a una red existente: `docker network connect <redAConectar> <nombreContenedor>`. Esto hace que mantenga la conexion a la red inicial y añade una nueva conexion a esta nueva red. Para desconectar de la red `docker network disconnect <redADesconectar> <contenedor>`
+- **Eliminar red**: `docker network rm <nombreRed>`. Puede dar un error por *puntos activos*, que son contenedores conectados en la red. Una vez eliminados, podemos eliminar la red.
+- **Asignar ip a contenedor**: Podemos asignar una ip a un contenedor indicandolo a la hora de crearlo, indicando la red y pasandole la ip `docker run --newtork <nombreRed> --ip <ip> ...`. Ojo que la ip debe pertenecer a la subred, es decir, debe entrar en el rango de ips de la subred a la que conectamos el contenedor. Además deberemos haber creado la red de forma anterior
+- **Asignar la red HOST al contenedor**: Indicamos la red `host` que crea por defecto docker al arrancar el contenedor `docker run --network host`
+- **Asignar la red none al contenedor**: `docker run --network none`
+
+### Nota sobre redes: 
+
+Tomaremos como premisa que la IP de nuestro Docker Host es `192.168.100.2`- 
+
+Al exponer un puerto en un contenedor, por defecto, este utiliza todas las interfaces de nuestra máquina. 
+
+Veámos un ejemplo:
+
+```bash
+[ricardo@localhost ~]$ docker run -d -p 8080:80 nginx
+196a13fe6198e1a3e8d55aedda90882f6abd80f4cdf41b2f29219a9632e5e3a1
+[ricardo@localhost ~]$ docker ps -l
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                  NAMES
+196a13fe6198        nginx               "nginx -g 'daemon of…"   5 seconds ago       Up 2 seconds        0.0.0.0:8080->80/tcp   frosty_jenning
+```
+
+Si observamos la parte de ports, veremos un `0.0.0.0`. Esto significa que podremos acceder al servicio en el puerto `8080` utilizando `localhost:8080` , o `127.0.0.1:8080`, `192.168.100.2:8080`.
+
+Si quisiéramos que sea accesible solamente vía `localhost` y no vía `192.168.100.2`, entonces haríamos lo siguiente:
+
+```bash
+[ricardo@localhost ~]$ docker run -d -p 127.0.0.1:8081:80 nginx
+1d7e82ff15da55b8c774baae56827aef12d59ab848a5f5fb7f883d1f6d1ee6e1
+[ricardo@localhost ~]$ docker ps -l
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                    NAMES
+1d7e82ff15da        nginx               "nginx -g 'daemon of…"   3 seconds ago       Up 1 second         127.0.0.1:8081->80/tcp   musing_tesla
+```
+
+Como observamos, ahora en vez de `0.0.0.0` vemos un `127.0.0.1`, lo que indica que nuestro servicio es accesible sólo vía `localhost` y no usando `192.168.100.2`
