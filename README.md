@@ -777,3 +777,265 @@ CONTAINER ID        IMAGE               COMMAND                  CREATED        
 ```
 
 Como observamos, ahora en vez de `0.0.0.0` vemos un `127.0.0.1`, lo que indica que nuestro servicio es accesible sólo vía `localhost` y no usando `192.168.100.2`
+
+## Docker compose
+Ver: https://docs.docker.com/compose/reference/
+
+Se trata de una herramienta para crear aplicaciones multicontenedor. Podemos definir contenedores, imágenes, volúmenes, redes... Asimismo podemos levantar los contenedores con una sola orden.
+
+NOTA: Se deberá instalar el 'plugin' de docker-compose para usarlo
+
+Docker compose utiliza un archivo `yml` para levantar los contenedores. Dispone de distintos apartados:
+- **version** (obligatoria): Es la versión de docker compose. Normalmente la más actual (3 ahora mismo)
+- **services** (obligatoria): Son los servicios que se van a crear. Permite definir los parametros de lanzamiento de docker en un documento
+- **volumes** (opcional): Define los volumenes del contenedor. Permite usar volumenes anonimos y de host
+- **network** (opcional): Define las redes y permite conectar distintos contenedores a éstas
+
+Un ejemplo básico de docker-compose seria el siguiente:
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq           # Nombre del contenedor
+        ports:                          # Mapeo de puertos
+            -"8080:80"          
+        image: mysql:5.7                # Imagen que usamos para el contenedor
+        environment:                    # Variables de entorno
+            -"MYSQL_ROOT_PASSWORD=123"
+```
+
+Para **arrancar** los contenedores, en el mismo directorio que el archivo, haremos `docker-compose up`, y para ^**eliminarlos** usaremos `docker-compose down`. De forma genérica docker-compose busca un archivo llamado `docker-compose`. Si no existe saltará un error, aunque podemos definir manualmente el nombre del archivo docker-compose con el parámetro `-f`: `docker-compose -f <nombre>.yml up`.
+
+
+### Variables de entorno en docker-compose mediante archivos de texto
+
+Podemos definir las variables de entorno en otro archivo y llamarlo desde el docker compose mediante:
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq                   
+        ports:                                  
+            -"8080:80"          
+        image: mysql:5.7                        
+        env_file: nombreYExtensionDeArchivo     # Variables de entorno desde archivo           
+```
+
+### Volumenes en docker compose
+
+Usaremos la parte de `volume` incluyendo el nombre que queremos y el mapeo. 
+
+- **Volumenes anonimos**: Debemos definirlos fuera del apartado `services` y luego mapearlo en el contenedor que queramos dentro de la sección `volumes`.
+
+    Docker compose crea los volumenes dentro de la carpeta docker/volumes usando un nombre alternativo que muestra por pantalla al levantar el docker, usando el nombre de la carpeta como prefijo:
+
+    ```yml
+    version: '3'
+    services:
+        web:
+            container_name: myslq                   
+            ports:                                  
+                -"8080:80"          
+            image: mysql:5.7                        
+            env_file: nombreYExtensionDeArchivo     
+            volumes:
+                - "vol2:/usr/share/file"            # Ref. del volumen anonimo y carpeta mapeada
+    volumes:
+        vol2:                                       # Define el volumen anonimo
+    ```
+- **Volumenes de host**: Debemos indicar el directorio del host donde queremos mapear la carpeta del contenedor a la hoda de definir el volumen:
+    ```yml
+    version: '3'
+    services:
+        web:
+            container_name: myslq                   
+            ports:                                  
+                -"8080:80"          
+            image: mysql:5.7                        
+            env_file: nombreYExtensionDeArchivo     
+            volumes:
+                - "folderDelHost:/usr/share/file"   # Define volumen de host y lo mapea con el del container
+    ```
+
+### Redes en compose
+
+Debemos definirlas en `networks` fuera de los contenedores. 
+Docker compose las creará incluyendo el nombre de la carpeta actual, usándola como prefijo para el nombre de la red.
+Podemos incluir a los contenedores dentro de las redes incluyendo la referencia a la red dentro del contenedor:
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        ports:                  
+            -"8080:80"          
+        image: mysql:5.7        
+        networks:
+            - net-test          # Incluimos el contenedor en la red net-test definida abajo
+    web2:
+        container_name: myslq2  
+        ports:                  
+            -"8081:80"          
+        image: mysql:5.7        
+        networks:
+            - net-test          # Incluimos el contenedor en la red net-test definida abajo
+networks:
+    net-test:                   # Define la red docker a la que queremos incorporar los contenedores
+```
+
+### Construir imagenes con docker-compose
+
+Docker compose permite crear imagenes con la orden `build`. Lo que hace es buscar un archivo `dockerfile` en la ruta que le indiquemos, y lo construye a partir de éste. Para lanzarlo usaremos la orden `docker compose build`.
+
+Por ejemplo, si situamos el dockerfile en el mismo directorio del docker-compose:
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        image: mysql:5.7        
+        build: .                # Indicamos al build que busque el dockerfile en el mismo directorio
+```
+
+Si queremos usar un archivo que no se llame `dockerfile`, incluiremos la opcion `context` para el directorio, y `dockerfile` para el archivo
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        image: mysql:5.7        
+        build: 
+            context: .                      # Indicamos el directorio donde estará el archivo
+            dockerfile: nombreDockerfile    # Indicamos el nombre del archivo
+```
+
+### Sobreescribir el cmd de una imagen con docker-compose
+
+Si queremos sobreescribir el `CMD` del dockerfile, podemos indicarlo con la opción `command` dentro del servicio:
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        image: mysql:5.7        
+        command: python -m Sim....  # Orden que sobreescribe el dockerfile de la imagen
+```
+
+### Limitar recursos a contenedores:
+
+Podemos limitar los recursos de un contenedor como en dockerfile, indicandolo en el apartado de servicios:
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        image: mysql:5.7        
+        mem_limit: 20m  # limitación de memoria
+        cpuset: "0"     # limitación de CPUs
+```
+
+### Política de reinicio de contenedores
+Ver: https://docs.docker.com/config/containers/start-containers-automatically/
+
+La política de reinicio de contenedores permite definir el comportamiento. Existen una serie de flags que indican qué deben hacer en caso de que se caigan. 
+
+Se usa la orden `restart` para definir su comportamiento, usando las siguientes opciones:
+
+**Flag**|**Description**
+:-----:|:-----:
+**no**|Do not automatically restart the container. (the default)
+**on-failure**|Restart the container if it exits due to an error, which manifests as a non-zero exit code.
+**always**|Always restart the container if it stops. If it is manually stopped, it is restarted only when Docker daemon restarts or the container itself is manually restarted. (See the second bullet listed in restart policy details)
+**unless-stopped**|Similar to always, except that when the container is stopped (manually or otherwise), it is not restarted even after Docker daemon restarts.
+
+```yml
+version: '3'
+services:
+    web:
+        container_name: myslq   
+        image: mysql:5.7        
+        restart: <opcion>
+```
+
+### Personalizar nombre de proyecto con docker-compose
+
+Podemos cambiar el prefijo que se incluye en la construcción de los volúmenes y las redes, sustituyendo el nombre de la carpeta donde se instancia la imagen por un valor que le pasamos de forma manual.
+
+Podemos definir usando la opcion `-p` de *project*, usando `docker-compose -p <nombre> up`.
+
+### Dependencia entre contenedores
+
+En ciertos casos vamos a requerir que alguno de los contenedores se arranque antes que otros, por ejemplo un servidor de bases de datos. Para ello usaremos la opcion `depends on`, donde indiquemos que servicios deben levantarse antes:
+
+```yml
+version: '3'
+services:
+  db:
+    container_name: wp-mysql
+    image: mysql:5.7
+    volumes:
+       - $PWD/data:/var/lib/mysql # $PWD indica que usemos el directorio actual 
+    environment:
+       MYSQL_ROOT_PASSWORD: 12345678
+       MYSQL_DATABASE: wordpress
+       MYSQL_USER: wordpress
+       MYSQL_PASSWORD: wordpress
+    ports:
+      - "3306:3306"
+    networks:
+      - my_net
+
+  wp:
+    container_name: wp-web
+    volumes:
+      - "$PWD/html:/var/www/html" 
+    depends_on:
+      - db              # Indica que primero necesita que se cree la base de datos
+    image: wordpress
+    ports:
+      - "80:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+    networks:
+      - my_net
+networks:
+  my_net:
+```
+
+### Más opciones en docker
+
+Existen más opciones, tanto hacer pull, matar los contenedores... se pueden ver con la orden `help`
+
+## Docker registry
+
+Un registry es un servicio donde podemos subir y bajar imágenes de docker. Podemos crear un registry local, siendo un contenedor en si mismo.
+
+Para crearlo usaremos: `docker run -d -p 5000:5000 --name registry -v <carpetaHost>:/var/lib/registry registry:2`, indicando el puerto 5000 y asociando la carpeta de persistencia. En esta orden vemos que se usa la imagen registry en su version 2. 
+
+### Subir y bajar imágenes
+
+Si queremos **subir** una imagen a nuestro registry deberemos:
+- Disponer de la imagen en nuestro local
+- Taggearla con `docker tag <nombreImagen>:<tag> <ipRegistry>:<puertoRegistry>/<nombreDeLaimagenEnRegistryQueQueramos>`. Por ejemplo `docker tag hello-world:latest localhost:5000/hello-world`
+- Subir la imagen con un *push* al registry: `docker push <ipRegistry>:<puertoRegistry>/<nombreDeLaimagenEnRegistryQueQueramos>`
+
+Si queremos **bajar** una imagen desde nuestro registry, usaremos un *pull* de la siguiente forma:
+- `docker pull <ipRegistry>:<puertoRegistry>/<tagEnRegistry>`
+
+### Compartir imagenes en red
+
+Si tratamos de hacer un push a un registry usando su ip, vemos que nos da un error ya que se necesita conexión segura.
+
+Para ello editaremos el archivo `docker.service` con `sudo vi /lib/systemd/system/docker.service` e iremos a la linea `ExecStart` y le incluiremos la anotación de que existe un registry inseguro en la up y el puerto que configuramos `--insecure-registry <ipRegistry>:<puertoRegistry>`
+
+Después deberemos reinicar los servicios con `sudo systemctl daemon-reload` y reiniciamos el registry y el servicio de docker.
+
+Una vez que hacemos esto ya podemos conectarnos a ese registry.
